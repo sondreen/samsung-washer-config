@@ -1,4 +1,4 @@
-#W# elcome to the samsung-washer-config wiki!
+## Welcome to the samsung-washer-config wiki!
 
 This is based purely on input from ChatGPT and with no guarantee of working with other models than the one I'm using.
 The washer+dryer is integrated with [LocalThings](https://github.com/mbillow/localthings). I'm running a Samsung WD83T734CBH.
@@ -9,6 +9,12 @@ My washer is in HA simnply named washing_machine. Automations have to be modifie
 # GitHub-safe washing-machine configuration
 
 This directory is a sanitized copy of the Home Assistant washing-machine files.
+## Screenshot of example cards:
+![Washing machine card](button_card.png)
+
+![Washing machine popup - in progress](popup_card_in_progress.png)
+
+![Washing machine popup - finished](popup_card_finished.png)
 
 ## Changes made
 
