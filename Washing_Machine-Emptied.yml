@@ -9,6 +9,11 @@ triggers:
       - binary_sensor.washing_machine_door
     from: 'off'
     to: 'on'
+    for:
+      hours: 0
+      minutes: 1
+      seconds: 0
+
 conditions:
   - alias: Finished laundry is waiting
     note: >-
