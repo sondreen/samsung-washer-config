@@ -1,0 +1,447 @@
+type: custom:button-card
+entity: sensor.washing_machine_progress
+triggers_update:
+  - sensor.washing_machine_progress
+  - sensor.washing_machine_machine_state
+  - sensor.washing_machine_estimated_finish
+  - sensor.washing_machine_progress_percent
+  - sensor.washing_machine_alarm_code
+  - binary_sensor.washing_machine_power
+  - binary_sensor.washing_machine_smart_control
+  - binary_sensor.washing_machine_door
+  - input_text.washing_machine_status
+  - input_boolean.washing_machine_notified
+  - input_datetime.washing_machine_finished
+  - input_datetime.washing_machine_acknowledged
+show_icon: true
+show_name: false
+show_state: true
+icon: |
+  [[[
+    const progress =
+      (states['sensor.washing_machine_progress']?.state || '')
+        .toLowerCase();
+
+    const status =
+      (states['input_text.washing_machine_status']?.state || '')
+        .toLowerCase();
+
+    /*
+     * Finished and still waiting to be emptied.
+     */
+    if (
+      ['finished washing', 'finished drying'].includes(status)
+    ) {
+      return 'mdi:washing-machine-alert';
+    }
+
+    /*
+     * Emptied keeps the washing-machine identity.
+     */
+    if (status === 'emptied') {
+      return 'mdi:washing-machine';
+    }
+
+    /*
+     * Idle/off/unavailable.
+     */
+    if (
+      [
+        'idle',
+        'none',
+        'off',
+        'unknown',
+        'unavailable'
+      ].includes(progress)
+    ) {
+      return 'mdi:washing-machine-off';
+    }
+
+    return 'mdi:washing-machine';
+  ]]]
+state_display: |
+  [[[
+    const progress =
+      (states['sensor.washing_machine_progress']?.state || '')
+        .toLowerCase();
+
+    const machine =
+      (states['sensor.washing_machine_machine_state']?.state || '')
+        .toLowerCase();
+
+    const status =
+      (states['input_text.washing_machine_status']?.state || '')
+        .toLowerCase();
+
+    const power =
+      states['binary_sensor.washing_machine_power']?.state === 'on';
+
+    /*
+     * Persistent post-cycle states take priority over the
+     * Samsung progress state.
+     */
+    if (
+      ['finished washing', 'finished drying'].includes(status)
+    ) {
+      return 'Finished';
+    }
+
+    if (status === 'emptied') {
+      return 'Emptied';
+    }
+
+    if (
+      machine === 'pause' &&
+      progress !== 'delaywash'
+    ) {
+      return 'Paused';
+    }
+
+    if (
+      !power &&
+      ['idle', 'none', 'off'].includes(progress)
+    ) {
+      return 'Off';
+    }
+
+    const labels = {
+      idle: 'Idle',
+
+      delaywash: 'Scheduled',
+
+      weightsensing: 'Sensing',
+      predrain: 'Draining',
+      prewash: 'Pre-wash',
+
+      wash: 'Washing',
+      rinse: 'Rinsing',
+      spin: 'Spinning',
+
+      drying: 'Drying',
+      dryingwithdooropen: 'Drying',
+      cooling: 'Cooling',
+
+      steaming: 'Steaming',
+      sanitizing: 'Sanitising',
+      airwashing: 'Air wash',
+
+      finish: 'Finished',
+
+      none: 'Idle',
+      ready: 'Ready',
+      off: 'Off',
+
+      unknown: 'Unknown',
+      unavailable: 'Unavailable'
+    };
+
+    return labels[progress] ??
+      progress
+        .replaceAll('_', ' ')
+        .replace(/\b\w/g, letter => letter.toUpperCase());
+  ]]]
+custom_fields:
+  eta: |
+    [[[
+      const progress =
+        (states['sensor.washing_machine_progress']?.state || '')
+          .toLowerCase();
+
+      const status =
+        (states['input_text.washing_machine_status']?.state || '')
+          .toLowerCase();
+
+      const finishRaw =
+        states['sensor.washing_machine_estimated_finish']?.state;
+
+      const percent =
+        Number(
+          states['sensor.washing_machine_progress_percent']?.state
+        );
+
+      /*
+       * Laundry has been dealt with.
+       */
+      if (status === 'emptied') {
+        return 'Done';
+      }
+
+      /*
+       * Finished laundry remains pending even after Samsung
+       * changes progress back to idle.
+       */
+      if (
+        ['finished washing', 'finished drying'].includes(status)
+      ) {
+        const raw =
+          states['input_datetime.washing_machine_finished']?.state;
+
+        if (
+          raw &&
+          ![
+            'unknown',
+            'unavailable',
+            'none',
+            ''
+          ].includes(String(raw).toLowerCase())
+        ) {
+          const finished =
+            new Date(
+              String(raw).replace(' ', 'T')
+            );
+
+          if (!Number.isNaN(finished.getTime())) {
+            const minutes =
+              Math.max(
+                0,
+                Math.floor(
+                  (Date.now() - finished.getTime()) / 60000
+                )
+              );
+
+            if (minutes < 1) {
+              return 'Unload';
+            }
+
+            if (minutes < 60) {
+              return `${minutes}m ago`;
+            }
+
+            const hours =
+              Math.floor(minutes / 60);
+
+            const mins =
+              minutes % 60;
+
+            return mins
+              ? `${hours}h ${mins}m`
+              : `${hours}h`;
+          }
+        }
+
+        return 'Unload';
+      }
+
+      /*
+       * Nothing useful to display while normally idle/off.
+       */
+      if (
+        [
+          'idle',
+          'none',
+          'ready',
+          'off',
+          'unknown',
+          'unavailable'
+        ].includes(progress)
+      ) {
+        return '';
+      }
+
+      /*
+       * Estimated finish isn't currently available.
+       */
+      if (
+        !finishRaw ||
+        [
+          'unknown',
+          'unavailable',
+          'none',
+          ''
+        ].includes(String(finishRaw).toLowerCase())
+      ) {
+        return '';
+      }
+
+      const finish =
+        new Date(finishRaw);
+
+      if (Number.isNaN(finish.getTime())) {
+        return '';
+      }
+
+      const finishTime =
+        finish.toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+
+      /*
+       * Samsung Delay End.
+       *
+       * Don't display progress_percent here because Samsung
+       * reports approximately 1% while merely waiting to start.
+       */
+      if (progress === 'delaywash') {
+        return finishTime;
+      }
+
+      /*
+       * Physical cycle:
+       *
+       * Example:
+       * 75% · 12:08
+       */
+      if (Number.isFinite(percent)) {
+        return `${Math.round(percent)}% · ${finishTime}`;
+      }
+
+      return finishTime;
+    ]]]
+styles:
+  card:
+    - width: 80px
+    - height: 80px
+    - margin: 10px
+    - border-radius: 15px
+    - border: 1px solid transparent
+  grid:
+    - grid-template-areas: |
+        "i"
+        "s"
+        "eta"
+    - grid-template-columns: 1fr
+    - grid-template-rows: 1fr min-content min-content
+  img_cell:
+    - justify-self: center
+    - align-self: center
+  icon:
+    - width: 48%
+    - color: |
+        [[[
+          const progress =
+            (states['sensor.washing_machine_progress']?.state || '')
+              .toLowerCase();
+
+          const machine =
+            (states['sensor.washing_machine_machine_state']?.state || '')
+              .toLowerCase();
+
+          const status =
+            (states['input_text.washing_machine_status']?.state || '')
+              .toLowerCase();
+
+          /*
+           * Emptied:
+           * green washing-machine icon, steady.
+           */
+          if (status === 'emptied') {
+            return 'var(--success-color)';
+          }
+
+          /*
+           * Finished and waiting:
+           * green washing-machine-alert icon.
+           */
+          if (
+            ['finished washing', 'finished drying'].includes(status)
+          ) {
+            return 'var(--success-color)';
+          }
+
+          if (
+            machine === 'pause' &&
+            progress !== 'delaywash'
+          ) {
+            return 'var(--warning-color)';
+          }
+
+          if (progress === 'delaywash') {
+            return 'var(--info-color)';
+          }
+
+          if (
+            [
+              'weightsensing',
+              'predrain',
+              'prewash',
+              'wash',
+              'rinse',
+              'spin',
+              'drying',
+              'dryingwithdooropen',
+              'cooling',
+              'steaming',
+              'sanitizing',
+              'airwashing'
+            ].includes(progress)
+          ) {
+            return 'darkorange';
+          }
+
+          return 'var(--primary-text-color)';
+        ]]]
+    - animation: |
+        [[[
+          const progress =
+            (states['sensor.washing_machine_progress']?.state || '')
+              .toLowerCase();
+
+          const status =
+            (states['input_text.washing_machine_status']?.state || '')
+              .toLowerCase();
+
+          /*
+           * Finished laundry keeps blinking until it is
+           * actually acknowledged/emptied.
+           */
+          if (
+            ['finished washing', 'finished drying'].includes(status)
+          ) {
+            return 'blink 2s ease infinite';
+          }
+
+          /*
+           * Once emptied, stop blinking.
+           */
+          if (status === 'emptied') {
+            return 'none';
+          }
+
+          /*
+           * Slow blink during an actual physical cycle.
+           */
+          if (
+            [
+              'weightsensing',
+              'predrain',
+              'prewash',
+              'wash',
+              'rinse',
+              'spin',
+              'drying',
+              'dryingwithdooropen',
+              'cooling',
+              'steaming',
+              'sanitizing',
+              'airwashing'
+            ].includes(progress)
+          ) {
+            return 'blink 4s ease infinite';
+          }
+
+          return 'none';
+        ]]]
+  state:
+    - justify-self: center
+    - font-weight: bold
+    - font-size: 11px
+    - line-height: 13px
+    - padding-bottom: 1px
+    - white-space: nowrap
+  custom_fields:
+    eta:
+      - justify-self: center
+      - font-size: 9px
+      - line-height: 11px
+      - opacity: 0.75
+      - padding-bottom: 3px
+      - white-space: nowrap
+size: 48%
+tap_action:
+  action: more-info
+  haptic: light
+hold_action:
+  action: more-info
+  haptic: medium

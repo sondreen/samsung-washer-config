@@ -1,0 +1,61 @@
+# GitHub-safe YAML equivalents of the helpers used by the washing-machine setup.
+# If these helpers were created through the Home Assistant UI, you do not need
+# to duplicate them in configuration.yaml. This file is provided as an example
+# for people who prefer YAML-managed helpers.
+
+input_datetime:
+  washing_machine_acknowledged:
+    name: Washing machine acknowledged
+    icon: arcticons:clock
+    has_date: true
+    has_time: true
+
+  washing_machine_finished:
+    name: Washing machine finished
+    icon: mdi:washing-machine-alert
+    has_date: true
+    has_time: true
+
+input_text:
+  washing_machine_status:
+    name: Washing Machine Status
+    icon: mdi:washing-machine
+    max: 100
+
+input_boolean:
+  washing_machine_notified:
+    name: washing_machine_notified
+
+  washing_machine_state:
+    name: washing_machine_state
+    icon: mdi:washing-machine
+
+input_select:
+  washing_machine_programme:
+    name: Washing machine programme
+    icon: mdi:washing-machine
+    options:
+      - Eco 40-60
+      - Cotton
+      - Outdoor
+      - Cotton Dry
+      - 15' Quick Wash
+      - Drum Clean+
+      - Super Speed
+      - Intense Cold
+      - Synthetics
+      - Delicates
+      - Towels
+      - Bedding
+      - Shirts
+      - Hygiene Steam
+      - Wool
+      - Activewear
+      - Colours
+      - Silent Wash
+      - Cloudy Day
+      - Rinse+Spin
+      - Drain/Spin
+      - Wash+Dry
+      - Synthetics Dry
+      - Air Wash

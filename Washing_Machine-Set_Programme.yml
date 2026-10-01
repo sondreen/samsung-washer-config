@@ -1,0 +1,51 @@
+alias: 'Washing Machine: Set Programme'
+description: >-
+  Converts the friendly washing-machine programme selected in Home Assistant
+  into the Samsung course code required by LocalThings.
+triggers:
+  - trigger: state
+    entity_id:
+      - input_select.washing_machine_programme
+conditions:
+  - condition: template
+    value_template: |-
+      {{ trigger.to_state is not none
+         and trigger.to_state.state not in ['unknown', 'unavailable', 'none'] }}
+actions:
+  - variables:
+      course_map:
+        Eco 40-60: 1c
+        Cotton: 1b
+        Outdoor: '23'
+        Cotton Dry: '38'
+        15' Quick Wash: 1e
+        Drum Clean+: '29'
+        Super Speed: 1d
+        Intense Cold: 1f
+        Synthetics: '25'
+        Delicates: '26'
+        Towels: '33'
+        Bedding: '24'
+        Shirts: '32'
+        Hygiene Steam: '20'
+        Wool: '22'
+        Activewear: 2f
+        Colours: '21'
+        Silent Wash: 2d
+        Cloudy Day: '30'
+        Rinse+Spin: '27'
+        Drain/Spin: '28'
+        Wash+Dry: '36'
+        Synthetics Dry: '39'
+        Air Wash: '37'
+      samsung_course: '{{ course_map.get(states(''input_select.washing_machine_programme'')) }}'
+  - condition: template
+    value_template: |-
+      {{ samsung_course is not none
+         and states('select.washing_machine_cycle') != samsung_course }}
+  - action: select.select_option
+    target:
+      entity_id: select.washing_machine_cycle
+    data:
+      option: '{{ samsung_course }}'
+mode: restart

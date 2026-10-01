@@ -1,0 +1,1634 @@
+type: custom:popup-card
+dismissable: true
+target:
+  entity_id:
+    - sensor.washing_machine_progress
+card:
+  type: custom:vertical-stack-in-card
+  cards:
+    - type: custom:button-card
+      entity: sensor.washing_machine_machine_state
+      show_icon: false
+      show_name: false
+      show_state: false
+      triggers_update:
+        - sensor.washing_machine_machine_state
+        - sensor.washing_machine_progress
+        - sensor.washing_machine_progress_percent
+        - sensor.washing_machine_completion_time
+        - sensor.washing_machine_estimated_finish
+        - input_select.washing_machine_programme
+        - select.washing_machine_wash_temperature
+        - select.washing_machine_spin_speed
+        - select.washing_machine_rinse_cycles
+        - number.washing_machine_delay_start
+        - sensor.washing_machine_alarm_code
+        - binary_sensor.washing_machine_smart_control
+        - binary_sensor.washing_machine_power
+        - binary_sensor.washing_machine_door
+        - input_text.washing_machine_status
+        - input_boolean.washing_machine_notified
+        - input_datetime.washing_machine_finished
+        - input_datetime.washing_machine_acknowledged
+      tap_action:
+        action: none
+      styles:
+        card:
+          - padding: 20px
+          - box-shadow: none
+          - border: none
+          - background: transparent
+        grid:
+          - grid-template-areas: |
+              "header"
+              "main"
+              "progress"
+              "stages"
+              "details"
+          - grid-template-columns: 1fr
+          - grid-template-rows: auto auto auto auto auto
+          - row-gap: 17px
+        custom_fields:
+          header:
+            - width: 100%
+          main:
+            - width: 100%
+          progress:
+            - width: 100%
+          stages:
+            - width: 100%
+          details:
+            - width: 100%
+      custom_fields:
+        header: |
+          [[[
+            const machine =
+              (states['sensor.washing_machine_machine_state']?.state || '')
+                .toLowerCase();
+
+            const progress =
+              (states['sensor.washing_machine_progress']?.state || '')
+                .toLowerCase();
+
+            const programme =
+              states['input_select.washing_machine_programme']?.state ?? '';
+
+            const smartControl =
+              states['binary_sensor.washing_machine_smart_control']?.state === 'on';
+
+            const power =
+              states['binary_sensor.washing_machine_power']?.state === 'on';
+
+            const washerStatus =
+              (states['input_text.washing_machine_status']?.state || '')
+                .toLowerCase();
+
+            const finishedWaiting =
+              ['finished washing', 'finished drying'].includes(washerStatus);
+
+            const emptied =
+              washerStatus === 'emptied';
+
+            let status = 'READY';
+            let colour = 'var(--secondary-text-color)';
+            let iconColour = 'var(--primary-color)';
+            let headerIcon = 'mdi:washing-machine';
+
+            if (finishedWaiting) {
+              status = 'READY TO UNLOAD';
+              colour = 'var(--success-color)';
+              iconColour = 'var(--success-color)';
+              headerIcon = 'mdi:washing-machine-alert';
+
+            } else if (emptied) {
+              status = 'EMPTIED';
+              colour = 'var(--success-color)';
+              iconColour = 'var(--success-color)';
+              headerIcon = 'mdi:washing-machine';
+
+            } else if (progress === 'delaywash') {
+              status = 'SCHEDULED';
+              colour = 'var(--info-color)';
+
+            } else if (machine === 'pause') {
+              status = 'PAUSED';
+              colour = 'var(--warning-color)';
+
+            } else if (
+              [
+                'weightsensing',
+                'predrain',
+                'prewash',
+                'wash',
+                'rinse',
+                'spin',
+                'drying',
+                'dryingwithdooropen',
+                'cooling',
+                'steaming',
+                'sanitizing',
+                'airwashing'
+              ].includes(progress)
+            ) {
+              status = 'RUNNING';
+              colour = 'var(--info-color)';
+
+            } else if (
+              machine === 'unknown' ||
+              machine === 'unavailable'
+            ) {
+              status = 'OFFLINE';
+              colour = 'var(--error-color)';
+              iconColour = 'var(--disabled-text-color)';
+
+            } else if (!power) {
+              status = 'OFF';
+              colour = 'var(--secondary-text-color)';
+              iconColour = 'var(--secondary-text-color)';
+              headerIcon = 'mdi:washing-machine-off';
+
+            } else if (!smartControl) {
+              status = 'LOCAL CONTROL';
+              colour = 'var(--warning-color)';
+
+            } else {
+              status = 'READY';
+              colour = 'var(--success-color)';
+            }
+
+            return `
+              <div style="
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                gap:16px;
+              ">
+                <div style="
+                  display:flex;
+                  align-items:center;
+                  gap:13px;
+                  min-width:0;
+                ">
+                  <ha-icon
+                    icon="${headerIcon}"
+                    style="
+                      width:34px;
+                      height:34px;
+                      flex-shrink:0;
+                      color:${iconColour};
+                    ">
+                  </ha-icon>
+
+                  <div style="
+                    text-align:left;
+                    min-width:0;
+                  ">
+                    <div style="
+                      font-size:19px;
+                      font-weight:700;
+                    ">
+                      Washing machine
+                    </div>
+
+                    <div style="
+                      font-size:12px;
+                      margin-top:2px;
+                      color:var(--secondary-text-color);
+                      overflow:hidden;
+                      text-overflow:ellipsis;
+                      white-space:nowrap;
+                    ">
+                      ${programme}
+                    </div>
+                  </div>
+                </div>
+
+                <div style="
+                  display:flex;
+                  align-items:center;
+                  gap:7px;
+                  flex-shrink:0;
+                  font-size:11px;
+                  font-weight:700;
+                  letter-spacing:.5px;
+                  color:${colour};
+                ">
+                  <span style="
+                    width:8px;
+                    height:8px;
+                    border-radius:50%;
+                    background:${colour};
+                    display:inline-block;
+                  "></span>
+
+                  ${status}
+                </div>
+              </div>
+            `;
+          ]]]
+        main: |
+          [[[
+            const machine =
+              (states['sensor.washing_machine_machine_state']?.state || '')
+                .toLowerCase();
+
+            const progress =
+              (states['sensor.washing_machine_progress']?.state || '')
+                .toLowerCase();
+
+            const washerStatus =
+              (states['input_text.washing_machine_status']?.state || '')
+                .toLowerCase();
+
+            const programme =
+              states['input_select.washing_machine_programme']?.state ?? 'Unknown';
+
+            const remaining =
+              Number(states['sensor.washing_machine_completion_time']?.state);
+
+            const finishRaw =
+              states['sensor.washing_machine_estimated_finish']?.state;
+
+            const descriptions = {
+              'Eco 40-60':
+                'Normally soiled cotton washable at 40–60 °C · Max load',
+              'Cotton':
+                'Everyday cottons, bedding, underwear and towels · Max load',
+              'Outdoor':
+                'Outdoor and performance fabrics · Max 2 kg',
+              'Cotton Dry':
+                'General drying programme for cotton · Max 4–6 kg',
+              "15' Quick Wash":
+                'Quick wash for lightly soiled laundry · Max 2 kg',
+              'Drum Clean+':
+                'Cleans the drum and door gasket · Run empty, no detergent',
+              'Super Speed':
+                'Fast everyday wash for items such as underwear and shirts · Max 5 kg',
+              'Intense Cold':
+                'Low-temperature Ecobubble wash designed to reduce power consumption · Max 4 kg',
+              'Synthetics':
+                'Polyester, polyamide and similar synthetic fabrics · Max 4 kg',
+              'Delicates':
+                'Gentle wash for delicate and hand-wash fabrics · Max 2 kg',
+              'Towels':
+                'Bath towels, washcloths and bath mats · Max 4 kg',
+              'Bedding':
+                'Bedspreads, sheets and covers · Max 2 kg',
+              'Shirts':
+                'Cotton and synthetic shirts and blouses · Max 2 kg',
+              'Hygiene Steam':
+                'Steam-assisted hygienic wash for skin-contact cottons and linens · Max 4 kg',
+              'Wool':
+                'Gentle cycle for machine-washable wool · Max 2 kg',
+              'Activewear':
+                'Sportswear and performance clothing · Max 2 kg',
+              'Colours':
+                'Gentle wash with extra rinsing and reduced spin · Max 4 kg',
+              'Silent Wash':
+                'Reduced operating noise and vibration · Max 4 kg',
+              'Cloudy Day':
+                'Optimised spin drying for humid conditions · Max load',
+              'Rinse+Spin':
+                'Additional rinse followed by spin · Max load',
+              'Drain/Spin':
+                'Drains and spins to remove additional moisture · Max load',
+              'Wash+Dry':
+                'Washes and dries suitable cotton items in one programme · Max 4–6 kg',
+              'Synthetics Dry':
+                'Low-temperature drying for heat-sensitive items · Max 3 kg',
+              'Air Wash':
+                'Refreshes items and helps remove bad odours · Max 1 kg'
+            };
+
+            const labels = {
+              idle: 'Ready',
+              weightsensing: 'Sensing load',
+              predrain: 'Draining',
+              prewash: 'Pre-wash',
+              wash: 'Washing',
+              rinse: 'Rinsing',
+              spin: 'Spinning',
+              drying: 'Drying',
+              dryingwithdooropen: 'Drying',
+              cooling: 'Cooling',
+              steaming: 'Steaming',
+              sanitizing: 'Sanitising',
+              airwashing: 'Air washing'
+            };
+
+            const validDate = raw => {
+              if (
+                !raw ||
+                ['unknown', 'unavailable', 'none', '']
+                  .includes(String(raw).toLowerCase())
+              ) {
+                return null;
+              }
+
+              const date =
+                new Date(String(raw).replace(' ', 'T'));
+
+              return Number.isNaN(date.getTime())
+                ? null
+                : date;
+            };
+
+            const finishTime = () => {
+              const finish =
+                validDate(finishRaw);
+
+              if (!finish) {
+                return '';
+              }
+
+              return finish.toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+              });
+            };
+
+            const finishedDate =
+              validDate(
+                states['input_datetime.washing_machine_finished']?.state
+              );
+
+            const acknowledgedDate =
+              validDate(
+                states['input_datetime.washing_machine_acknowledged']?.state
+              );
+
+            const finishedAgo = () => {
+              if (!finishedDate) {
+                return '';
+              }
+
+              const minutes =
+                Math.max(
+                  0,
+                  Math.floor(
+                    (Date.now() - finishedDate.getTime()) / 60000
+                  )
+                );
+
+              if (minutes < 1) {
+                return 'just now';
+              }
+
+              if (minutes < 60) {
+                return `${minutes} min ago`;
+              }
+
+              const hours =
+                Math.floor(minutes / 60);
+
+              const mins =
+                minutes % 60;
+
+              return mins
+                ? `${hours} h ${mins} min ago`
+                : `${hours} h ago`;
+            };
+
+            const emptyDelay = () => {
+              if (
+                !finishedDate ||
+                !acknowledgedDate ||
+                acknowledgedDate < finishedDate
+              ) {
+                return '';
+              }
+
+              const minutes =
+                Math.max(
+                  0,
+                  Math.round(
+                    (
+                      acknowledgedDate.getTime() -
+                      finishedDate.getTime()
+                    ) / 60000
+                  )
+                );
+
+              if (minutes < 1) {
+                return 'immediately after finishing';
+              }
+
+              if (minutes < 60) {
+                return `${minutes} min after finishing`;
+              }
+
+              const hours =
+                Math.floor(minutes / 60);
+
+              const mins =
+                minutes % 60;
+
+              return mins
+                ? `${hours} h ${mins} min after finishing`
+                : `${hours} h after finishing`;
+            };
+
+            const finishedWaiting =
+              ['finished washing', 'finished drying'].includes(washerStatus);
+
+            const emptied =
+              washerStatus === 'emptied';
+
+            let title = 'Ready';
+
+            let subtitle =
+              descriptions[programme] ?? programme;
+
+            if (finishedWaiting) {
+              title = 'Ready to unload';
+
+              const ago =
+                finishedAgo();
+
+              subtitle =
+                `${programme}` +
+                (
+                  ago
+                    ? ` · Finished ${ago}`
+                    : ''
+                );
+
+            } else if (emptied) {
+              title = 'Laundry emptied';
+
+              const delay =
+                emptyDelay();
+
+              const finishedClock =
+                finishedDate
+                  ? finishedDate.toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: false
+                    })
+                  : '';
+
+              const emptiedClock =
+                acknowledgedDate
+                  ? acknowledgedDate.toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: false
+                    })
+                  : '';
+
+              const info = [];
+
+              if (finishedClock) {
+                info.push(`Finished ${finishedClock}`);
+              }
+
+              if (emptiedClock) {
+                info.push(`emptied ${emptiedClock}`);
+              }
+
+              if (delay) {
+                info.push(delay);
+              }
+
+              subtitle =
+                info.length
+                  ? info.join(' · ')
+                  : `${programme} · Laundry has been dealt with`;
+
+            } else if (progress === 'delaywash') {
+              title = 'Scheduled';
+
+              const finish =
+                finishTime();
+
+              subtitle =
+                `${programme}` +
+                (
+                  finish
+                    ? ` · Finishes at ${finish}`
+                    : ''
+                );
+
+            } else if (
+              [
+                'weightsensing',
+                'predrain',
+                'prewash',
+                'wash',
+                'rinse',
+                'spin',
+                'drying',
+                'dryingwithdooropen',
+                'cooling',
+                'steaming',
+                'sanitizing',
+                'airwashing'
+              ].includes(progress) ||
+              machine === 'pause'
+            ) {
+              title =
+                machine === 'pause'
+                  ? 'Paused'
+                  : (
+                      labels[progress] ??
+                      progress.charAt(0).toUpperCase() +
+                      progress.slice(1)
+                    );
+
+              const info = [];
+
+              if (
+                Number.isFinite(remaining) &&
+                remaining >= 0
+              ) {
+                const hours =
+                  Math.floor(remaining / 60);
+
+                const minutes =
+                  Math.round(remaining % 60);
+
+                info.push(
+                  hours > 0
+                    ? `${hours} h ${minutes} min remaining`
+                    : `${minutes} min remaining`
+                );
+              }
+
+              const finish =
+                finishTime();
+
+              if (finish) {
+                info.push(`finishes ${finish}`);
+              }
+
+              subtitle =
+                programme +
+                (
+                  info.length
+                    ? ` · ${info.join(' · ')}`
+                    : ''
+                );
+
+            } else if (
+              machine === 'unknown' ||
+              machine === 'unavailable'
+            ) {
+              title = 'Unavailable';
+              subtitle = 'Waiting for washing machine';
+            }
+
+            return `
+              <div style="
+                text-align:left;
+                padding:5px 1px 2px 1px;
+              ">
+                <div style="
+                  font-size:30px;
+                  font-weight:700;
+                  line-height:1.1;
+                ">
+                  ${title}
+                </div>
+
+                <div style="
+                  margin-top:7px;
+                  font-size:14px;
+                  line-height:1.4;
+                  color:var(--secondary-text-color);
+                ">
+                  ${subtitle}
+                </div>
+              </div>
+            `;
+          ]]]
+        progress: |
+          [[[
+            const machine =
+              (states['sensor.washing_machine_machine_state']?.state || '')
+                .toLowerCase();
+
+            const stage =
+              (states['sensor.washing_machine_progress']?.state || '')
+                .toLowerCase();
+
+            const washerStatus =
+              (states['input_text.washing_machine_status']?.state || '')
+                .toLowerCase();
+
+            if (washerStatus === 'emptied') {
+              return '';
+            }
+
+            let percentage =
+              Number(
+                states['sensor.washing_machine_progress_percent']?.state
+              );
+
+            const remaining =
+              Number(
+                states['sensor.washing_machine_completion_time']?.state
+              );
+
+            if (stage === 'delaywash') {
+              let remainingText = '';
+
+              if (
+                Number.isFinite(remaining) &&
+                remaining > 0
+              ) {
+                const hours =
+                  Math.floor(remaining / 60);
+
+                const minutes =
+                  Math.round(remaining % 60);
+
+                remainingText =
+                  hours > 0
+                    ? `${hours} h ${minutes} min to finish`
+                    : `${minutes} min to finish`;
+              }
+
+              return `
+                <div>
+                  <div style="
+                    display:flex;
+                    justify-content:space-between;
+                    margin-bottom:7px;
+                    font-size:11px;
+                    color:var(--secondary-text-color);
+                  ">
+                    <span>Waiting to start</span>
+                    <span>${remainingText}</span>
+                  </div>
+
+                  <div style="
+                    height:6px;
+                    border-radius:20px;
+                    background:var(--divider-color);
+                  "></div>
+                </div>
+              `;
+            }
+
+            const finishedWaiting =
+              ['finished washing', 'finished drying'].includes(washerStatus);
+
+            if (
+              machine !== 'active' &&
+              machine !== 'pause' &&
+              stage !== 'finish' &&
+              !finishedWaiting
+            ) {
+              return '';
+            }
+
+            if (!Number.isFinite(percentage)) {
+              percentage = 0;
+            }
+
+            if (
+              stage === 'finish' ||
+              finishedWaiting
+            ) {
+              percentage = 100;
+            }
+
+            percentage =
+              Math.max(
+                0,
+                Math.min(100, percentage)
+              );
+
+            let leftText =
+              'Cycle progress';
+
+            if (
+              stage === 'finish' ||
+              finishedWaiting
+            ) {
+              leftText = 'Complete';
+
+            } else if (
+              Number.isFinite(remaining) &&
+              remaining >= 0
+            ) {
+              const hours =
+                Math.floor(remaining / 60);
+
+              const minutes =
+                Math.round(remaining % 60);
+
+              leftText =
+                hours > 0
+                  ? `${hours} h ${minutes} min left`
+                  : `${minutes} min left`;
+            }
+
+            return `
+              <div>
+                <div style="
+                  display:flex;
+                  justify-content:space-between;
+                  margin-bottom:7px;
+                  font-size:11px;
+                  color:var(--secondary-text-color);
+                ">
+                  <span>${leftText}</span>
+                  <span>${Math.round(percentage)}%</span>
+                </div>
+
+                <div style="
+                  height:7px;
+                  overflow:hidden;
+                  border-radius:20px;
+                  background:var(--divider-color);
+                ">
+                  <div style="
+                    width:${percentage}%;
+                    height:100%;
+                    border-radius:20px;
+                    background:var(--primary-color);
+                    transition:width .5s ease;
+                  "></div>
+                </div>
+              </div>
+            `;
+          ]]]
+        stages: |
+          [[[
+            const progress =
+              (states['sensor.washing_machine_progress']?.state || '')
+                .toLowerCase();
+
+            const washerStatus =
+              (states['input_text.washing_machine_status']?.state || '')
+                .toLowerCase();
+
+            const programme =
+              states['input_select.washing_machine_programme']?.state ?? '';
+
+            if (washerStatus === 'emptied') {
+              return '';
+            }
+
+            const finishedWaiting =
+              ['finished washing', 'finished drying'].includes(washerStatus);
+
+            if (
+              [
+                'idle',
+                'delaywash',
+                'unknown',
+                'unavailable',
+                'none',
+                'off'
+              ].includes(progress) &&
+              !finishedWaiting
+            ) {
+              return '';
+            }
+
+            const effectiveProgress =
+              finishedWaiting
+                ? 'finish'
+                : progress;
+
+            const dryOnly = [
+              'Cotton Dry',
+              'Synthetics Dry',
+              'Air Wash'
+            ].includes(programme);
+
+            const washDry =
+              programme === 'Wash+Dry';
+
+            if (dryOnly) {
+              const drying =
+                [
+                  'drying',
+                  'dryingwithdooropen',
+                  'airwashing'
+                ].includes(effectiveProgress);
+
+              const cooling =
+                effectiveProgress === 'cooling';
+
+              const finished =
+                effectiveProgress === 'finish';
+
+              return `
+                <div style="
+                  display:flex;
+                  gap:4px;
+                  font-size:12px;
+                  color:var(--secondary-text-color);
+                ">
+                  <div style="
+                    flex:1;
+                    text-align:center;
+                    opacity:${drying || cooling || finished ? 1 : .32};
+                    font-weight:${drying ? 700 : 500};
+                  ">
+                    ${cooling || finished ? '✓ ' : ''}Dry
+                  </div>
+
+                  <div style="
+                    flex:1;
+                    text-align:center;
+                    opacity:${cooling || finished ? 1 : .32};
+                    font-weight:${cooling ? 700 : 500};
+                  ">
+                    ${finished ? '✓ ' : ''}Cool
+                  </div>
+
+                  <div style="
+                    flex:1;
+                    text-align:center;
+                    opacity:${finished ? 1 : .32};
+                    font-weight:${finished ? 700 : 500};
+                  ">
+                    Finish
+                  </div>
+                </div>
+              `;
+            }
+
+            const order = {
+              weightsensing: 0,
+              predrain: 0,
+              prewash: 0,
+              steaming: 1,
+              sanitizing: 1,
+              wash: 1,
+              rinse: 2,
+              spin: 3,
+              drying: 4,
+              dryingwithdooropen: 4,
+              cooling: 4,
+              finish: washDry ? 5 : 4
+            };
+
+            const current =
+              order[effectiveProgress] ?? 0;
+
+            const makeStage = (
+              label,
+              position
+            ) => {
+              const active =
+                current === position;
+
+              const complete =
+                current > position;
+
+              return `
+                <div style="
+                  flex:1;
+                  text-align:center;
+                  opacity:${active || complete ? 1 : .32};
+                  font-weight:${active ? 700 : 500};
+                ">
+                  ${complete ? '✓ ' : ''}${label}
+                </div>
+              `;
+            };
+
+            return `
+              <div style="
+                display:flex;
+                gap:2px;
+                font-size:12px;
+                color:var(--secondary-text-color);
+              ">
+                ${makeStage('Wash', 1)}
+                ${makeStage('Rinse', 2)}
+                ${makeStage('Spin', 3)}
+                ${
+                  washDry
+                    ? makeStage('Dry', 4)
+                    : ''
+                }
+              </div>
+            `;
+          ]]]
+        details: |
+          [[[
+            const temperatureRaw =
+              states['select.washing_machine_wash_temperature']?.state ?? 'none';
+
+            const spinRaw =
+              states['select.washing_machine_spin_speed']?.state ?? 'none';
+
+            const rinsesRaw =
+              states['select.washing_machine_rinse_cycles']?.state ?? 'none';
+
+            const progress =
+              (states['sensor.washing_machine_progress']?.state || '')
+                .toLowerCase();
+
+            const washerStatus =
+              (states['input_text.washing_machine_status']?.state || '')
+                .toLowerCase();
+
+            const delay =
+              Number(
+                states['number.washing_machine_delay_start']?.state
+              );
+
+            const finishRaw =
+              states['sensor.washing_machine_estimated_finish']?.state;
+
+            const normalise = value =>
+              String(value)
+                .toLowerCase()
+                .replaceAll('-', '_');
+
+            const tempValue =
+              normalise(temperatureRaw);
+
+            const spinValue =
+              normalise(spinRaw);
+
+            const rinseValue =
+              normalise(rinsesRaw);
+
+            let temperatureText = '—';
+
+            if (
+              ![
+                'none',
+                'unknown',
+                'unavailable'
+              ].includes(tempValue)
+            ) {
+              temperatureText =
+                tempValue === 'cold'
+                  ? 'Cold'
+                  : `${temperatureRaw}°`;
+            }
+
+            let spinText = '—';
+
+            if (
+              ![
+                'none',
+                'unknown',
+                'unavailable'
+              ].includes(spinValue)
+            ) {
+              if (
+                spinValue === 'rinsehold' ||
+                spinValue === 'rinse_hold'
+              ) {
+                spinText = 'Rinse hold';
+
+              } else if (
+                spinValue === 'nospin' ||
+                spinValue === 'no_spin'
+              ) {
+                spinText = 'No spin';
+
+              } else {
+                spinText =
+                  spinRaw;
+              }
+            }
+
+            let rinseText = '—';
+
+            if (
+              ![
+                'none',
+                'unknown',
+                'unavailable'
+              ].includes(rinseValue)
+            ) {
+              rinseText =
+                rinsesRaw;
+            }
+
+            const formatTime = date =>
+              date.toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+              });
+
+            const validDate = raw => {
+              if (
+                !raw ||
+                [
+                  'unknown',
+                  'unavailable',
+                  'none',
+                  ''
+                ].includes(String(raw).toLowerCase())
+              ) {
+                return null;
+              }
+
+              const date =
+                new Date(String(raw).replace(' ', 'T'));
+
+              return Number.isNaN(date.getTime())
+                ? null
+                : date;
+            };
+
+            let finishText = '—';
+            let finishCaption = 'Finish by';
+
+            /*
+             * Finished:
+             * use our recorded actual completion timestamp.
+             */
+            if (
+              ['finished washing', 'finished drying'].includes(washerStatus)
+            ) {
+              const date =
+                validDate(
+                  states['input_datetime.washing_machine_finished']?.state
+                );
+
+              if (date) {
+                finishText =
+                  formatTime(date);
+
+                finishCaption =
+                  'Finished';
+              }
+
+            /*
+             * Emptied:
+             * use the door acknowledgement timestamp.
+             */
+            } else if (washerStatus === 'emptied') {
+              const date =
+                validDate(
+                  states['input_datetime.washing_machine_acknowledged']?.state
+                );
+
+              if (date) {
+                finishText =
+                  formatTime(date);
+
+                finishCaption =
+                  'Emptied';
+              }
+
+            /*
+             * Scheduled/running:
+             * Samsung's estimated_finish is authoritative.
+             */
+            } else {
+              const estimatedFinish =
+                validDate(finishRaw);
+
+              if (estimatedFinish) {
+                finishText =
+                  formatTime(estimatedFinish);
+
+                finishCaption =
+                  'Finish by';
+
+              /*
+               * Idle before Start:
+               *
+               * Convert Samsung's Delay End hour value into the
+               * actual clock time the user cares about.
+               */
+              } else if (
+                progress === 'idle' &&
+                Number.isFinite(delay) &&
+                delay > 0
+              ) {
+                const target =
+                  new Date(
+                    Date.now() +
+                    (delay * 60 * 60 * 1000)
+                  );
+
+                finishText =
+                  formatTime(target);
+
+                finishCaption =
+                  'Finish by';
+              }
+            }
+
+            const cell = (
+              icon,
+              value,
+              caption
+            ) => `
+              <div style="
+                flex:1;
+                min-width:0;
+                text-align:center;
+              ">
+                <ha-icon
+                  icon="${icon}"
+                  style="
+                    width:19px;
+                    height:19px;
+                    color:var(--primary-color);
+                    margin-bottom:5px;
+                  ">
+                </ha-icon>
+
+                <div style="
+                  font-size:13px;
+                  font-weight:700;
+                  overflow:hidden;
+                  white-space:nowrap;
+                  text-overflow:ellipsis;
+                ">
+                  ${value}
+                </div>
+
+                <div style="
+                  font-size:10px;
+                  margin-top:2px;
+                  color:var(--secondary-text-color);
+                ">
+                  ${caption}
+                </div>
+              </div>
+            `;
+
+            return `
+              <div style="
+                display:flex;
+                gap:5px;
+                padding-top:15px;
+                border-top:1px solid var(--divider-color);
+              ">
+                ${cell(
+                  'mdi:thermometer',
+                  temperatureText,
+                  'Temp'
+                )}
+
+                ${cell(
+                  'mdi:rotate-right',
+                  spinText,
+                  'Spin'
+                )}
+
+                ${cell(
+                  'mdi:water-sync',
+                  rinseText,
+                  'Rinses'
+                )}
+
+                ${cell(
+                  washerStatus === 'emptied'
+                    ? 'mdi:door-open'
+                    : 'mdi:clock-end',
+                  finishText,
+                  finishCaption
+                )}
+              </div>
+            `;
+          ]]]
+    - type: conditional
+      conditions:
+        - condition: state
+          entity: binary_sensor.washing_machine_power
+          state: 'on'
+        - condition: state
+          entity: binary_sensor.washing_machine_smart_control
+          state: 'off'
+      card:
+        type: tile
+        entity: binary_sensor.washing_machine_smart_control
+        name: Remote control disabled
+        icon: mdi:remote-off
+        color: orange
+        vertical: false
+        tap_action:
+          action: none
+    - type: conditional
+      conditions:
+        - condition: state
+          entity: sensor.washing_machine_alarm_code
+          state_not: none
+        - condition: state
+          entity: sensor.washing_machine_alarm_code
+          state_not: unknown
+        - condition: state
+          entity: sensor.washing_machine_alarm_code
+          state_not: unavailable
+        - condition: state
+          entity: sensor.washing_machine_alarm_code
+          state_not: ''
+      card:
+        type: tile
+        entity: sensor.washing_machine_alarm_code
+        name: Washing machine warning
+        icon: mdi:alert-circle
+        color: red
+    - type: conditional
+      conditions:
+        - condition: state
+          entity: sensor.washing_machine_machine_state
+          state: idle
+      card:
+        type: tile
+        entity: input_select.washing_machine_programme
+        name: Programme
+        icon: mdi:washing-machine
+        vertical: false
+        features_position: bottom
+        features:
+          - type: select-options
+    - type: conditional
+      conditions:
+        - condition: state
+          entity: sensor.washing_machine_machine_state
+          state: idle
+      card:
+        type: grid
+        columns: 3
+        square: false
+        cards:
+          - type: tile
+            entity: select.washing_machine_wash_temperature
+            name: Temp
+            icon: mdi:thermometer
+            features_position: bottom
+            features:
+              - type: select-options
+          - type: tile
+            entity: select.washing_machine_spin_speed
+            name: Spin
+            icon: mdi:rotate-right
+            features_position: bottom
+            features:
+              - type: select-options
+          - type: tile
+            entity: select.washing_machine_rinse_cycles
+            name: Rinses
+            icon: mdi:water-sync
+            features_position: bottom
+            features:
+              - type: select-options
+    - type: conditional
+      conditions:
+        - condition: state
+          entity: sensor.washing_machine_machine_state
+          state: idle
+        - condition: state
+          entity: binary_sensor.washing_machine_smart_control
+          state: 'on'
+      card:
+        type: custom:button-card
+        entity: number.washing_machine_delay_start
+        show_name: false
+        show_icon: false
+        show_state: false
+        triggers_update:
+          - number.washing_machine_delay_start
+          - sensor.washing_machine_estimated_finish
+          - sensor.washing_machine_progress
+          - binary_sensor.washing_machine_smart_control
+        styles:
+          card:
+            - padding: 12px 16px
+            - box-shadow: none
+            - border: none
+            - background: transparent
+          grid:
+            - grid-template-areas: '"info minus value plus"'
+            - grid-template-columns: 1fr 44px 90px 44px
+            - align-items: center
+          custom_fields:
+            info:
+              - justify-self: start
+            minus:
+              - justify-self: center
+            value:
+              - justify-self: center
+            plus:
+              - justify-self: center
+        custom_fields:
+          info: |
+            [[[
+              const delay =
+                Number(
+                  states['number.washing_machine_delay_start']?.state
+                );
+
+              const formatTime = date =>
+                date.toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false
+                });
+
+              let secondary =
+                'No delay';
+
+              if (
+                Number.isFinite(delay) &&
+                delay > 0
+              ) {
+                const target =
+                  new Date(
+                    Date.now() +
+                    (delay * 60 * 60 * 1000)
+                  );
+
+                secondary =
+                  `Finish at ${formatTime(target)}`;
+              }
+
+              return `
+                <div style="
+                  display:flex;
+                  align-items:center;
+                  gap:11px;
+                ">
+                  <ha-icon
+                    icon="mdi:clock-outline"
+                    style="
+                      width:22px;
+                      height:22px;
+                      color:var(--primary-color);
+                    ">
+                  </ha-icon>
+
+                  <div style="
+                    text-align:left;
+                  ">
+                    <div style="
+                      font-size:14px;
+                      font-weight:600;
+                    ">
+                      Finish by
+                    </div>
+
+                    <div style="
+                      margin-top:2px;
+                      font-size:12px;
+                      color:var(--secondary-text-color);
+                    ">
+                      ${secondary}
+                    </div>
+                  </div>
+                </div>
+              `;
+            ]]]
+          minus:
+            card:
+              type: custom:button-card
+              icon: mdi:minus
+              show_name: false
+              size: 18px
+              styles:
+                card:
+                  - width: 36px
+                  - height: 36px
+                  - padding: 0
+                  - border-radius: 18px
+                  - box-shadow: none
+              tap_action:
+                action: call-service
+                service: number.decrement
+                target:
+                  entity_id: number.washing_machine_delay_start
+          value: |
+            [[[
+              const delay =
+                Number(
+                  states['number.washing_machine_delay_start']?.state
+                );
+
+              if (
+                !Number.isFinite(delay) ||
+                delay <= 0
+              ) {
+                return `
+                  <div style="
+                    text-align:center;
+                  ">
+                    <div style="
+                      font-size:15px;
+                      font-weight:700;
+                    ">
+                      Now
+                    </div>
+
+                    <div style="
+                      font-size:10px;
+                      color:var(--secondary-text-color);
+                    ">
+                      no delay
+                    </div>
+                  </div>
+                `;
+              }
+
+              const target =
+                new Date(
+                  Date.now() +
+                  (delay * 60 * 60 * 1000)
+                );
+
+              const time =
+                target.toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false
+                });
+
+              return `
+                <div style="
+                  text-align:center;
+                ">
+                  <div style="
+                    font-size:15px;
+                    font-weight:700;
+                  ">
+                    ${time}
+                  </div>
+
+                  <div style="
+                    font-size:10px;
+                    color:var(--secondary-text-color);
+                  ">
+                    finish
+                  </div>
+                </div>
+              `;
+            ]]]
+          plus:
+            card:
+              type: custom:button-card
+              icon: mdi:plus
+              show_name: false
+              size: 18px
+              styles:
+                card:
+                  - width: 36px
+                  - height: 36px
+                  - padding: 0
+                  - border-radius: 18px
+                  - box-shadow: none
+              tap_action:
+                action: call-service
+                service: number.increment
+                target:
+                  entity_id: number.washing_machine_delay_start
+    - type: conditional
+      conditions:
+        - condition: state
+          entity: sensor.washing_machine_machine_state
+          state: idle
+        - condition: state
+          entity: binary_sensor.washing_machine_smart_control
+          state: 'on'
+      card:
+        type: custom:button-card
+        entity: button.washing_machine_start
+        name: Start programme
+        icon: mdi:play
+        show_name: true
+        show_icon: true
+        show_state: false
+        styles:
+          card:
+            - height: 48px
+            - margin: 4px 10px 12px 10px
+            - padding: 0 16px
+            - border-radius: 12px
+          grid:
+            - grid-template-areas: '"i n"'
+            - grid-template-columns: 28px auto
+            - justify-content: center
+            - align-items: center
+            - column-gap: 7px
+          icon:
+            - width: 21px
+            - color: var(--primary-color)
+          name:
+            - font-size: 14px
+            - font-weight: 600
+        tap_action:
+          action: call-service
+          service: button.press
+          target:
+            entity_id: button.washing_machine_start
+        confirmation:
+          text: Start the selected programme?
+    - type: conditional
+      conditions:
+        - condition: state
+          entity: sensor.washing_machine_progress
+          state: delaywash
+        - condition: state
+          entity: binary_sensor.washing_machine_smart_control
+          state: 'on'
+      card:
+        type: custom:button-card
+        entity: button.washing_machine_stop
+        name: Cancel scheduled programme
+        icon: mdi:stop
+        show_name: true
+        show_icon: true
+        show_state: false
+        styles:
+          card:
+            - height: 48px
+            - margin: 4px 10px 12px 10px
+            - border-radius: 12px
+          grid:
+            - grid-template-areas: '"i n"'
+            - grid-template-columns: 28px auto
+            - justify-content: center
+            - align-items: center
+            - column-gap: 7px
+          icon:
+            - width: 21px
+          name:
+            - font-size: 14px
+            - font-weight: 600
+        tap_action:
+          action: call-service
+          service: button.press
+          target:
+            entity_id: button.washing_machine_stop
+        confirmation:
+          text: Cancel the scheduled programme?
+    - type: conditional
+      conditions:
+        - condition: state
+          entity: sensor.washing_machine_machine_state
+          state: active
+        - condition: state
+          entity: sensor.washing_machine_progress
+          state_not: delaywash
+        - condition: state
+          entity: sensor.washing_machine_progress
+          state_not: finish
+        - condition: state
+          entity: binary_sensor.washing_machine_smart_control
+          state: 'on'
+      card:
+        type: horizontal-stack
+        cards:
+          - type: custom:button-card
+            entity: button.washing_machine_pause
+            name: Pause
+            icon: mdi:pause
+            styles:
+              card:
+                - height: 48px
+                - border-radius: 12px
+            tap_action:
+              action: call-service
+              service: button.press
+              target:
+                entity_id: button.washing_machine_pause
+          - type: custom:button-card
+            entity: button.washing_machine_stop
+            name: Stop
+            icon: mdi:stop
+            styles:
+              card:
+                - height: 48px
+                - border-radius: 12px
+            tap_action:
+              action: call-service
+              service: button.press
+              target:
+                entity_id: button.washing_machine_stop
+            confirmation:
+              text: Stop the current programme?
+    - type: conditional
+      conditions:
+        - condition: state
+          entity: sensor.washing_machine_machine_state
+          state: pause
+        - condition: state
+          entity: binary_sensor.washing_machine_smart_control
+          state: 'on'
+      card:
+        type: custom:button-card
+        entity: button.washing_machine_stop
+        name: Stop programme
+        icon: mdi:stop
+        styles:
+          card:
+            - height: 48px
+            - margin: 4px 10px 12px 10px
+            - border-radius: 12px
+        tap_action:
+          action: call-service
+          service: button.press
+          target:
+            entity_id: button.washing_machine_stop
+        confirmation:
+          text: Stop the current programme?

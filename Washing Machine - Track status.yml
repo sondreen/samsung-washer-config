@@ -1,0 +1,292 @@
+alias: Washing Machine - Track status
+description: >-
+  Tracks the washing machine directly from LocalThings. Distinguishes scheduled,
+  washing and drying stages, records completion time, updates the existing
+  washing-machine helpers, sends human-readable progress notifications with the
+  estimated finish time, and triggers the normal finished-clothes reminder when
+  the cycle finishes.
+triggers:
+  - trigger: state
+    entity_id:
+      - sensor.washing_machine_progress
+conditions: []
+actions:
+  - alias: Read washing machine state
+    note: >-
+      Normalise the LocalThings progress state and prepare human-readable stage
+      names. Keep the previous stage so the finish transition can determine
+      whether the completed programme was washing or drying.
+    variables:
+      progress: '{{ states(''sensor.washing_machine_progress'') }}'
+      progress_normalized: '{{ states(''sensor.washing_machine_progress'') | lower }}'
+      previous_progress: |-
+        {{
+          trigger.from_state.state
+          if trigger is defined
+          and trigger.from_state is not none
+          else ''
+        }}
+      previous_progress_normalized: |-
+        {{
+          (
+            trigger.from_state.state | lower
+            if trigger is defined
+            and trigger.from_state is not none
+            else ''
+          )
+        }}
+      estimated_finish: |-
+        {% set value =
+          states('sensor.washing_machine_estimated_finish')
+        %} {% if value not in [
+          'unknown',
+          'unavailable',
+          'none',
+          ''
+        ] %}
+          {% set finish = as_datetime(value, none) %}
+          {% if finish is not none %}
+            {{ as_local(finish).strftime('%H:%M') }}
+          {% endif %}
+        {% endif %}
+      stage_name: |-
+        {% set names = {
+          'idle': 'Idle',
+          'delaywash': 'Scheduled',
+          'weightsensing': 'Sensing load',
+          'predrain': 'Draining',
+          'prewash': 'Pre-wash',
+          'wash': 'Washing',
+          'rinse': 'Rinsing',
+          'spin': 'Spinning',
+          'drying': 'Drying',
+          'dryingwithdooropen': 'Drying',
+          'cooling': 'Cooling',
+          'steaming': 'Steaming',
+          'sanitizing': 'Sanitising',
+          'airwashing': 'Air wash',
+          'finish': 'Finished',
+          'none': 'Idle',
+          'ready': 'Ready',
+          'off': 'Off',
+          'unknown': 'Unknown',
+          'unavailable': 'Unavailable'
+        } %} {{
+          names.get(
+            progress_normalized,
+            progress | replace('_', ' ') | title
+          )
+        }}
+  - alias: Handle washing machine progress
+    choose:
+      - alias: Washing machine scheduled
+        conditions:
+          - condition: template
+            value_template: '{{ progress_normalized == ''delaywash'' }}'
+        sequence:
+          - alias: Mark washing machine inactive while waiting
+            note: >-
+              The real cycle trace showed that machine_state and running are
+              already active during delaywash. Progress is therefore the
+              authoritative source for whether the physical wash has started.
+            action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.washing_machine_state
+          - alias: Store scheduled washing machine status
+            action: input_text.set_value
+            target:
+              entity_id: input_text.washing_machine_status
+            data:
+              value: scheduled
+          - alias: Notify of scheduled washing machine
+            note: >-
+              Use LocalThings estimated_finish as the authoritative finish time.
+              The observed delayed Eco 40-60 cycle showed this estimate to be
+              accurate to the actual finish transition.
+            if:
+              - condition: time
+                after: '09:00'
+                before: '21:00'
+              - condition: state
+                entity_id: group.people
+                state: home
+            then:
+              - action: notify.mobile_app_primary_phone
+                data:
+                  title: Washing machine
+                  message: |-
+                    {% set finish = estimated_finish | trim %} {% if finish %}
+                      Washing machine scheduled.
+                      Estimated finish at {{ finish }}.
+                    {% else %}
+                      Washing machine scheduled.
+                    {% endif %}
+                  data:
+                    group: washing_machine
+                    tag: washing_machine_status
+                    channel: reminder
+                    importance: low
+                    timeout: 900
+      - alias: Washing machine operating
+        conditions:
+          - condition: template
+            value_template: |-
+              {{
+                progress_normalized in [
+                  'weightsensing',
+                  'predrain',
+                  'prewash',
+                  'wash',
+                  'rinse',
+                  'spin',
+                  'drying',
+                  'dryingwithdooropen',
+                  'cooling',
+                  'steaming',
+                  'sanitizing',
+                  'airwashing'
+                ]
+              }}
+        sequence:
+          - alias: Mark washing machine active
+            note: >-
+              The legacy washing_machine_state helper represents an actual
+              operating cycle, not Samsung's broader active machine state.
+            action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.washing_machine_state
+          - alias: Reset finished notification acknowledgement
+            note: >-
+              An actual operating stage confirms that a new physical cycle has
+              begun. The previous completed-cycle acknowledgement is therefore
+              no longer relevant to the current cycle.
+            action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.washing_machine_notified
+          - alias: Store simplified washing machine status
+            note: >-
+              Preserve the existing washing/drying helper contract. Drying,
+              drying-with-door-open, cooling and air-wash count as drying stages
+              for completion-reminder purposes.
+            action: input_text.set_value
+            target:
+              entity_id: input_text.washing_machine_status
+            data:
+              value: |-
+                {% if progress_normalized in [
+                  'drying',
+                  'dryingwithdooropen',
+                  'cooling',
+                  'airwashing'
+                ] %}
+                  drying
+                {% else %}
+                  washing
+                {% endif %}
+          - alias: Notify of washing machine progress
+            note: >-
+              Notify only when LocalThings changes progress stage.
+              estimated_finish changes alone do not trigger this automation,
+              preventing repeated ETA notifications.
+            if:
+              - condition: time
+                after: '09:00'
+                before: '21:00'
+              - condition: state
+                entity_id: group.people
+                state: home
+            then:
+              - action: notify.mobile_app_primary_phone
+                data:
+                  title: Washing machine
+                  message: |-
+                    {% set finish = estimated_finish | trim %} {% if finish %}
+                      Washing machine: {{ stage_name }}.
+                      Estimated finish at {{ finish }}.
+                    {% else %}
+                      Washing machine: {{ stage_name }}.
+                    {% endif %}
+                  data:
+                    group: washing_machine
+                    tag: washing_machine_status
+                    channel: reminder
+                    importance: low
+                    timeout: 900
+      - alias: Washing machine finished
+        conditions:
+          - condition: template
+            value_template: '{{ progress_normalized == ''finish'' }}'
+        sequence:
+          - alias: Record washing machine finish time
+            note: >-
+              Store the actual LocalThings finish transition. Do not infer this
+              from the later idle or power-off transitions: the observed washer
+              remained in finish for approximately one hour after completion.
+            action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.washing_machine_finished
+            data:
+              datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+          - alias: Determine whether washing or drying finished
+            note: >-
+              Treat drying, drying-with-door-open, cooling and air-wash as
+              drying completion. The stored simplified status is also checked in
+              case LocalThings transitions through an unexpected intermediate
+              stage immediately before finish.
+            action: input_text.set_value
+            target:
+              entity_id: input_text.washing_machine_status
+            data:
+              value: |-
+                {% if
+                  previous_progress_normalized in [
+                    'drying',
+                    'dryingwithdooropen',
+                    'cooling',
+                    'airwashing'
+                  ]
+                  or is_state(
+                    'input_text.washing_machine_status',
+                    'drying'
+                  )
+                %}
+                  finished drying
+                {% else %}
+                  finished washing
+                {% endif %}
+          - alias: Mark washing machine inactive
+            action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.washing_machine_state
+          - alias: Mark finished cycle as needing acknowledgement
+            note: >-
+              Turning this helper off triggers INFO - Notifying at home when its
+              normal home and time conditions allow. It remains off through the
+              washer's later idle and power-off states until somebody
+              acknowledges the laundry.
+            action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.washing_machine_notified
+      - alias: Washing machine idle
+        conditions:
+          - condition: template
+            value_template: |-
+              {{
+                progress_normalized in [
+                  'none',
+                  'idle',
+                  'ready',
+                  'off'
+                ]
+              }}
+        sequence:
+          - alias: Mark washing machine inactive
+            note: >-
+              Do not change washing_machine_notified here. The observed washer
+              automatically changed from finish to idle approximately one hour
+              after completion, so idle is not evidence that the laundry has
+              been removed.
+            action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.washing_machine_state
+mode: single

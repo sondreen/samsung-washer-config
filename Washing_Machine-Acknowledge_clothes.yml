@@ -1,0 +1,40 @@
+alias: INFO - Washing Machine - Acknowledge clothes
+description: >-
+  Handles the Clothes done action from washing-machine reminder notifications.
+  Records when the completed load was acknowledged and marks the outstanding
+  washing-machine reminder as complete.
+triggers:
+  - trigger: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: washing_machine_done
+conditions: []
+actions:
+  - alias: Record washing machine acknowledgement time
+    note: >-
+      Store the acknowledgement timestamp separately from the appliance state.
+      This records when someone confirms that the completed laundry has been
+      dealt with. A future door sensor can provide an additional automatic
+      acknowledgement path.
+    action: input_datetime.set_datetime
+    target:
+      entity_id: input_datetime.washing_machine_acknowledged
+    data:
+      datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+  - alias: Acknowledge washing machine reminder
+    note: >-
+      The finished-cycle tracker sets washing_machine_notified off. Turning it
+      back on stops the periodic finished-clothes reminders for this cycle.
+    action: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.washing_machine_notified
+  - alias: Clear washing machine reminder notification
+    note: >-
+      Clear the existing grouped reminder notification from the phone after the
+      user confirms that the clothes have been dealt with.
+    action: notify.mobile_app_primary_phone
+    data:
+      message: clear_notification
+      data:
+        tag: reminder
+mode: single

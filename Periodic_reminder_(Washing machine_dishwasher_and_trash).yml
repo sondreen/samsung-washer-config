@@ -1,0 +1,242 @@
+alias: INFO - Notifying at home
+description: Combined reminders for appliances and pending trash pickup
+triggers:
+  - trigger: time_pattern
+    hours: /2
+  - trigger: state
+    entity_id: input_boolean.dishwasher_notified
+    from: 'on'
+    to: 'off'
+  - trigger: state
+    entity_id: input_boolean.washing_machine_notified
+    from: 'on'
+    to: 'off'
+  - trigger: state
+    entity_id: input_boolean.trash_notified
+    from: 'on'
+    to: 'off'
+conditions:
+  - condition: time
+    after: '09:00'
+    before: '21:00'
+  - condition: state
+    entity_id: group.people
+    state: home
+  - condition: or
+    conditions:
+      - condition: state
+        entity_id: input_boolean.dishwasher_notified
+        state: 'off'
+      - condition: and
+        conditions:
+          - condition: state
+            entity_id: input_boolean.washing_machine_notified
+            state: 'off'
+          - condition: template
+            value_template: |-
+              {{ states('input_text.washing_machine_status')
+                 in ['finished washing', 'finished drying'] }}
+      - condition: and
+        conditions:
+          - condition: state
+            entity_id: input_boolean.trash_notified
+            state: 'off'
+          - condition: template
+            value_template: |-
+              {{ today_at('19:00') <= now()
+                 and now() < today_at('21:00') }}
+          - condition: template
+            value_template: |-
+              {% set tomorrow =
+                (now() + timedelta(days=1)).strftime('%Y-%m-%d')
+              %} {% set collection = state_attr(
+                'sensor.outside_waste_collection_schedule_additional_trash_sensor',
+                tomorrow
+              ) | default('', true) %} {{ 'Redt' in collection
+                 or 'Plastemballasje' in collection
+                 or 'Matavfall' in collection
+                 or 'Papir' in collection
+                 or 'Hageavfall' in collection }}
+actions:
+  - alias: Build reminder data
+    variables:
+      tomorrow: '{{ (now() + timedelta(days=1)).strftime(''%Y-%m-%d'') }}'
+      collection: |-
+        {{ state_attr(
+          'sensor.outside_waste_collection_schedule_additional_trash_sensor',
+          (now() + timedelta(days=1)).strftime('%Y-%m-%d')
+        ) | default('', true) }}
+      reminder_message: |-
+        {% set ns = namespace(parts=[], bins=[]) %}
+        {# Washing machine / dishwasher #} {% if is_state(
+          'input_boolean.washing_machine_notified',
+          'off'
+        ) %}
+          {% if is_state(
+            'input_text.washing_machine_status',
+            'finished drying'
+          ) %}
+            {% set wm_text = 'Clothes are finished drying' %}
+          {% elif is_state(
+            'input_text.washing_machine_status',
+            'finished washing'
+          ) %}
+            {% set wm_text = 'Clothes are ready to be hung to dry' %}
+          {% else %}
+            {% set wm_text = none %}
+          {% endif %}
+
+          {% if wm_text
+                and is_state(
+                  'input_boolean.dishwasher_notified',
+                  'off'
+                ) %}
+            {% set ns.parts = ns.parts + [
+              wm_text ~
+              ' and the dishwasher is ready to be emptied.'
+            ] %}
+          {% elif wm_text %}
+            {% set ns.parts = ns.parts + [wm_text ~ '.'] %}
+          {% elif is_state(
+            'input_boolean.dishwasher_notified',
+            'off'
+          ) %}
+            {% set ns.parts = ns.parts + [
+              'The dishwasher is ready to be emptied.'
+            ] %}
+          {% endif %}
+
+        {% elif is_state(
+          'input_boolean.dishwasher_notified',
+          'off'
+        ) %}
+          {% set ns.parts = ns.parts + [
+            'The dishwasher is ready to be emptied.'
+          ] %}
+        {% endif %}
+        {# Waste collection — only after 19:00 #} {% if is_state(
+          'input_boolean.trash_notified',
+          'off'
+        )
+              and today_at('19:00') <= now()
+              and now() < today_at('21:00') %}
+
+          {% if 'Redt' in collection %}
+            {% set ns.bins = ns.bins + ['black bin'] %}
+          {% endif %}
+
+          {% if 'Plastemballasje' in collection %}
+            {% set ns.bins = ns.bins + ['plastic bag'] %}
+          {% endif %}
+
+          {% if 'Matavfall' in collection %}
+            {% set ns.bins = ns.bins + ['brown bin'] %}
+          {% endif %}
+
+          {% if 'Papir' in collection %}
+            {% set ns.bins = ns.bins + ['blue bin'] %}
+          {% endif %}
+
+          {% if 'Hageavfall' in collection %}
+            {% set ns.bins = ns.bins + ['green bin'] %}
+          {% endif %}
+        {% endif %}
+        {% if ns.bins | length == 1 %}
+          {% set ns.parts = ns.parts + [
+            'Remember to put out the ' ~
+            ns.bins[0] ~
+            ' tonight.'
+          ] %}
+
+        {% elif ns.bins | length == 2 %}
+          {% set ns.parts = ns.parts + [
+            'Remember to put out the ' ~
+            ns.bins[0] ~
+            ' and the ' ~
+            ns.bins[1] ~
+            ' tonight.'
+          ] %}
+
+        {% elif ns.bins | length > 2 %}
+          {% set ns.parts = ns.parts + [
+            'Remember to put out the ' ~
+            (ns.bins[:-1] | join(', the ')) ~
+            ', and the ' ~
+            ns.bins[-1] ~
+            ' tonight.'
+          ] %}
+        {% endif %}
+        {{ ns.parts | join(' ') }}
+      reminder_actions: |-
+        {% set ns = namespace(actions=[]) %}
+        {% if is_state(
+          'input_boolean.washing_machine_notified',
+          'off'
+        )
+              and states('input_text.washing_machine_status')
+              in ['finished washing', 'finished drying'] %}
+          {% set ns.actions = ns.actions + [{
+            'action': 'washing_machine_done',
+            'title': 'Clothes done'
+          }] %}
+        {% endif %}
+        {% if is_state(
+          'input_boolean.dishwasher_notified',
+          'off'
+        ) %}
+          {% set ns.actions = ns.actions + [{
+            'action': 'dishwasher_done',
+            'title': 'Dishwasher done'
+          }] %}
+        {% endif %}
+        {% if is_state(
+          'input_boolean.trash_notified',
+          'off'
+        )
+              and today_at('19:00') <= now()
+              and now() < today_at('21:00')
+              and (
+                'Redt' in collection
+                or 'Plastemballasje' in collection
+                or 'Matavfall' in collection
+                or 'Papir' in collection
+                or 'Hageavfall' in collection
+              ) %}
+          {% set ns.actions = ns.actions + [{
+            'action': 'trash_done',
+            'title': 'Bins out'
+          }] %}
+        {% endif %}
+        {{ ns.actions | to_json }}
+  - alias: Only notify when there is a message
+    condition: template
+    value_template: '{{ reminder_message | trim | length > 0 }}'
+  - alias: Notify primary user
+    action: notify.mobile_app_primary_phone
+    data:
+      message: '{{ reminder_message }}'
+      data:
+        group: reminder
+        tag: reminder
+        channel: reminder
+        importance: medium
+        timeout: 900
+        actions: '{{ reminder_actions }}'
+  - alias: Notify secondary user when home
+    if:
+      - condition: state
+        entity_id: person.secondary_user
+        state: home
+    then:
+      - action: notify.mobile_app_secondary_phone
+        data:
+          message: '{{ reminder_message }}'
+          data:
+            group: reminder
+            tag: reminder
+            channel: reminder
+            importance: medium
+            timeout: 900
+            actions: '{{ reminder_actions }}'
+    enabled: false
+mode: single

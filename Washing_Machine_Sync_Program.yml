@@ -1,0 +1,51 @@
+alias: 'Washing Machine: Sync Programme'
+description: >-
+  Keeps the friendly Home Assistant washing-machine programme in sync when the
+  Samsung course changes locally or through LocalThings.
+triggers:
+  - trigger: state
+    entity_id:
+      - select.washing_machine_cycle
+conditions:
+  - condition: template
+    value_template: |-
+      {{ trigger.to_state is not none
+         and trigger.to_state.state not in ['unknown', 'unavailable', 'none'] }}
+actions:
+  - variables:
+      programme_map:
+        '20': Hygiene Steam
+        '21': Colours
+        '22': Wool
+        '23': Outdoor
+        '24': Bedding
+        '25': Synthetics
+        '26': Delicates
+        '27': Rinse+Spin
+        '28': Drain/Spin
+        '29': Drum Clean+
+        '30': Cloudy Day
+        '32': Shirts
+        '33': Towels
+        '36': Wash+Dry
+        '37': Air Wash
+        '38': Cotton Dry
+        '39': Synthetics Dry
+        1c: Eco 40-60
+        1b: Cotton
+        1e: 15' Quick Wash
+        1d: Super Speed
+        1f: Intense Cold
+        2f: Activewear
+        2d: Silent Wash
+      friendly_programme: '{{ programme_map.get(states(''select.washing_machine_cycle'')) }}'
+  - condition: template
+    value_template: |-
+      {{ friendly_programme is not none
+         and states('input_select.washing_machine_programme') != friendly_programme }}
+  - action: input_select.select_option
+    target:
+      entity_id: input_select.washing_machine_programme
+    data:
+      option: '{{ friendly_programme }}'
+mode: restart
