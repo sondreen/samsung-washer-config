@@ -1,3 +1,11 @@
+#W# elcome to the samsung-washer-config wiki!
+
+This is based purely on input from ChatGPT and with no guarantee of working with other models than the one I'm using.
+The washer+dryer is integrated with [LocalThings](https://github.com/mbillow/localthings). I'm running a Samsung WD83T734CBH.
+
+I've never uploaded to GitHub before, let me know if I mess something up. Thanks!
+
+My washer is in HA simnply named washing_machine. Automations have to be modified to accomodate your own Notify-devices and some automations (periodic reminders) reference integrations not related to this (i.e. Waste Collection Schedule), this you have to modify yourself.
 # GitHub-safe washing-machine configuration
 
 This directory is a sanitized copy of the Home Assistant washing-machine files.
